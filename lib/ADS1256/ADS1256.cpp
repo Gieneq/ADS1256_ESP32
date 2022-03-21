@@ -1,7 +1,8 @@
 /*
         ADS1256.h - Arduino Library for communication with Texas Instrument ADS1256 ADC
         Written by Adien Akhmad, August 2015
-		Modfified  Jan 2019 by Axel Sepulveda for ATMEGA328
+		    Modfified  Jan 2019 by Axel Sepulveda for ATMEGA328
+        Reworked in Mar 2022 by Gieneq/Pyrograf to support ESP32
 */
 
 #include "ADS1256.h"
@@ -28,14 +29,25 @@ ADS1256::ADS1256(float clockspdMhz, float vref, bool useResetPin) {
   // Default conversion factor
   _conversionFactor = 1.0;
 
-  // Start SPI on a quarter of ADC clock speed
+  // Choose HSPI:
+  // SCK : 14;
+  // MISO : 12;
+  // MOSI : 13;
+  // SS : 15;
   spiobject = SPIClass(HSPI);
+
+  // Start SPI on a quarter of ADC clock speed
   spiobject.begin();
-  spiobject.beginTransaction(SPISettings(clockspdMhz * 1000000 / 2, MSBFIRST, SPI_MODE1));
+  spiobject.beginTransaction(SPISettings(clockspdMhz * 1000000 / 4, MSBFIRST, SPI_MODE1));
 }
 
 void ADS1256::writeRegister(unsigned char reg, unsigned char wdata) {
   CSON();
+
+
+
+  //todo
+
   spiobject.transfer(ADS1256_CMD_WREG | reg); // opcode1 Write registers starting from reg
   spiobject.transfer(0);  // opcode2 Write 1+0 registers
   spiobject.transfer(wdata);  // write wdata
@@ -63,28 +75,18 @@ void ADS1256::sendCommand(unsigned char reg) {
   CSOFF();
 }
 
-void ADS1256::setConversionFactor(float val) { _conversionFactor = val; }
-
-void ADS1256::readTest() {
-  unsigned char _highByte, _midByte, _lowByte;
-  CSON();
-  spiobject.transfer(ADS1256_CMD_RDATA);
-  delayMicroseconds(7);              //  t6 delay (4*tCLKIN 50*0.13 = 6.5 us)    
-
-  _highByte = spiobject.transfer(ADS1256_CMD_WAKEUP);
-  _midByte = spiobject.transfer(ADS1256_CMD_WAKEUP);
-  _lowByte = spiobject.transfer(ADS1256_CMD_WAKEUP);
-
-  CSOFF();
+void ADS1256::setContinuousMode(bool useContinuous){
+  // if(useContinuous)
+    sendCommand(ADS1256_CMD_RDATAC);
+  // else
+  //   sendCommand(ADS1256_CMD_SDATAC);
 }
 
+void ADS1256::setConversionFactor(float val) { _conversionFactor = val; }
+
 float ADS1256::readCurrentChannel() {
-  CSON();
-  spiobject.transfer(ADS1256_CMD_RDATA);
-  delayMicroseconds(7);              //  t6 delay (4*tCLKIN 50*0.13 = 6.5 us)              
-  float adsCode = read_float32();
-  CSOFF();
-  return ((adsCode / 0x7FFFFF) * ((2 * _VREF) / (float)_pga)) * _conversionFactor;
+  long adsCode = readCurrentChannelRaw();       
+  return (((float)(adsCode) / 0x7FFFFF) * ((2 * _VREF) / (float)_pga)) * _conversionFactor;
 }
 
 // Reads raw ADC data, as 32bit int
@@ -97,18 +99,31 @@ long ADS1256::readCurrentChannelRaw() {
   return adsCode;
 }
 
+float ADS1256::pollCurrentChannel() {
+  long adsCode = pollCurrentChannelRaw();       
+  return (((float)(adsCode) / 0x7FFFFF) * ((2 * _VREF) / (float)_pga)) * _conversionFactor;
+}
+
+long ADS1256::pollCurrentChannelRaw() {
+  waitDRDY(); // should be already ready
+  CSON();
+  long adsCode = read_int32();
+  // long adsCode = 0;
+  // spiobject.transfer(buffer, 3);
+  CSOFF();
+  return adsCode;
+}
+
 // Call this ONLY after ADS1256_CMD_RDATA command
 unsigned long ADS1256::read_uint24() {
-  unsigned char _highByte, _midByte, _lowByte;
-  unsigned long value;
-
-  _highByte = spiobject.transfer(0);
-  _midByte  = spiobject.transfer(0);
-  _lowByte  = spiobject.transfer(0);
+  buffer[0] = 0;
+  buffer[1] = 0;
+  buffer[2] = 0;
+  spiobject.transfer(buffer, 3);
 
   // Combine all 3-bytes to 24-bit data using byte shifting.
-  value = ((long)_highByte << 16) + ((long)_midByte << 8) + ((long)_lowByte);
-  return value;
+  // return uint8_t(*buffer) >> 8;
+  return ((long)buffer[2] << 16) + ((long)buffer[1] << 8) + ((long)buffer[0]);
 }
 
 // Call this ONLY after ADS1256_CMD_RDATA command
@@ -247,6 +262,11 @@ uint8_t ADS1256::getStatus() {
   return readRegister(ADS1256_RADD_STATUS); 
 }
 
+// float ADS1256::pollContinuousChannel() {
+//   CSON(); 
+//   long adsCode = read_int32();
+//   CSOFF();
+// }
 
 
 void ADS1256::CSON() {
@@ -268,6 +288,19 @@ boolean ADS1256::isDRDY() {
   return !digitalRead(pinDRDY);
 }	
 
-  SPIClass* ADS1256::getSPI() {
-      return &spiobject;
-  }
+
+// 0 - output, 1 - input
+void ADS1256::setGPIOState(uint8_t gpios) {
+  uint8_t reg_value = (readGPIO() & 0xF0) + ((gpios << 4) & 0x0F);
+  writeRegister(ADS1256_RADD_IO, reg_value);
+
+}
+
+void ADS1256::setGPIOMode(uint8_t modes) {
+  uint8_t reg_value = (modes & 0xF0) + (readGPIO() & 0x0F);
+  writeRegister(ADS1256_RADD_IO, reg_value);
+}
+
+uint8_t ADS1256::readGPIO() {
+  return readRegister(ADS1256_RADD_IO); 
+}

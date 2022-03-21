@@ -1,7 +1,8 @@
 /*
         ADS1256.h - Arduino Library for communication with Texas Instrument ADS1256 ADC
         Written by Adien Akhmad, August 2015
-	Modifified  Jan 2019 by Axel Sepulveda for ATMEGA328
+	      Modifified  Jan 2019 by Axel Sepulveda for ATMEGA328
+        Reworked in Mar 2022 by Gieneq/Pyrograf to support ESP32
 */
 
 #ifndef ADS1256_h
@@ -10,37 +11,6 @@
 #define pinDRDY 2
 #define pinRST  4
 #define pinCS   15
-
-
-// #if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__)
-
-//     #define pinDRDY 9
-//     #define pinRST  8
-//     #define pinCS   10 
-    
-// #elif defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-
-//     #define pinDRDY 49
-//     #define pinRST  48
-//     #define pinCS   53 
-	
-//  // Contributions are welcome   
-// #elif   defined(ARDUINO_ARCH_ESP8266)
-// //https://esp8266-shop.com/esp8266-guide/esp8266-nodemcu-pinout/
-//     #define pinDRDY D0
-//     #define pinRST  D1
-//     #define pinCS   D8 // D8 Hw Cs in esp8266
-
-// #elif   defined(ARDUINO_ARCH_ESP32)
-// 	// Contributions are welcome
-//     //https://circuits4you.com/wp-content/uploads/2018/12/ESP32-Pinout.jpg
-//     #define pinDRDY 17
-//     #define pinRST  16
-//     #define pinCS   5 //  
-// #else 
-// 	// Contributions are welcome
-// 	#warning  "Oops! Pins for your board are not defined: pinDRDY, pinRST, pinCS"
-// #endif
 
 // ADS1256 Register address
 #define ADS1256_RADD_STATUS 0x00
@@ -125,6 +95,9 @@
 #define ADS1256_DRATE_5SPS 0x13
 #define ADS1256_DRATE_2_5SPS 0x03
 
+//other
+#define BUFFER_SIZE 3
+
 #include "Arduino.h"
 #include "SPI.h"
 
@@ -145,18 +118,23 @@ class ADS1256 {
   void waitDRDY();
   boolean isDRDY();
   void setGain(uint8_t gain);
-  void readTest();
-  SPIClass* getSPI();
+  void setContinuousMode(bool useContinuous);
+  float pollCurrentChannel();
+  long pollCurrentChannelRaw();
+  void setGPIOState(uint8_t gpios);
+  void setGPIOMode(uint8_t modes);
 
-//  private:
+ private:
   void CSON();
   void CSOFF();
   unsigned long read_uint24();
   long read_int32();
   float read_float32();
+  uint8_t readGPIO();
   byte _pga;
   float _VREF;
   float _conversionFactor;
+  uint8_t buffer[BUFFER_SIZE];
 
   SPIClass spiobject;
 };
