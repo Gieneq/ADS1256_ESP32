@@ -1,16 +1,37 @@
-/*
-        ADS1256.h - Arduino Library for communication with Texas Instrument ADS1256 ADC
-        Written by Adien Akhmad, August 2015
-	      Modifified  Jan 2019 by Axel Sepulveda for ATMEGA328
-        Reworked in Mar 2022 by Gieneq/Pyrograf to support ESP32
-*/
+#pragma once 
+
+#include "Arduino.h"
+#include "SPI.h"
 
 #ifndef ADS1256_h
 #define ADS1256_h
 
-#define pinDRDY 2
+#if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__)
+#define pinDRDY 9
+#define pinRST  8
+#define pinCS   10
+#define spiobject SPI
+// SCK : 13;
+// MISO : 12;
+// MOSI : 11;
+// SS : 10;
+
+#elif   defined(ARDUINO_ARCH_ESP32)
+#define pinDRDY 16
 #define pinRST  4
 #define pinCS   15
+#include <esp32-hal-spi.h>
+SPIClass spiobject(HSPI);
+// Choose HSPI:
+// SCK : 14;
+// MISO : 12;
+// MOSI : 13;
+// SS : 15;
+
+#else 
+	#warning  "Oops! Pins for your board are not defined: pinDRDY, pinRST, pinCS"
+#endif
+
 
 // ADS1256 Register address
 #define ADS1256_RADD_STATUS 0x00
@@ -98,8 +119,7 @@
 //other
 #define BUFFER_SIZE 3
 
-#include "Arduino.h"
-#include "SPI.h"
+enum mode_t {ONESHOT, CONTINUOUS};
 
 class ADS1256 {
  public:
@@ -107,22 +127,21 @@ class ADS1256 {
   void writeRegister(unsigned char reg, unsigned char wdata);
   unsigned char readRegister(unsigned char reg);
   void sendCommand(unsigned char cmd);
-  float readCurrentChannel();
-  long readCurrentChannelRaw();
-  void setConversionFactor(float val);
   void setChannel(byte channel);
   void setChannel(byte AIP, byte AIN);
   void begin(unsigned char drate, unsigned char gain, bool bufferenable);
-  void begin();
   uint8_t getStatus();  
   void waitDRDY();
+  void waitNotDRDY();
   boolean isDRDY();
+  void ADS1256::selfcal();
   void setGain(uint8_t gain);
-  void setContinuousMode(bool useContinuous);
-  float pollCurrentChannel();
-  long pollCurrentChannelRaw();
-  void setGPIOState(uint8_t gpios);
-  void setGPIOMode(uint8_t modes);
+  float readCurrentChannelC();
+  long readCurrentChannelCRaw();
+  float convertADStoVoltage(long ads);
+  void digitalWriteADS(uint8_t gpio_pin, uint8_t state);
+  void pinModeADS(uint8_t gpio_pin, uint8_t mode);
+  uint8_t digitalReadADS(uint8_t gpio_pin);
 
  private:
   void CSON();
@@ -133,8 +152,8 @@ class ADS1256 {
   uint8_t readGPIO();
   byte _pga;
   float _VREF;
-  float _conversionFactor;
-  uint8_t buffer[BUFFER_SIZE];
+  uint8_t _buffer[BUFFER_SIZE];
+  uint8_t _reg_IO;
 
   SPIClass spiobject;
 };
