@@ -29,8 +29,6 @@ ADS1256::ADS1256(float clockspdMhz, float vref, bool useResetPin) {
   // Copy reg IO, default all inputs, IO0 - CLKOUT dont care
   _reg_IO = B11110000;
 
-  _mode = ONESHOT;
-
   // Start SPI on a quarter of ADC clock speed
   spiobject.begin();
   spiobject.beginTransaction(SPISettings(clockspdMhz * 1000000 / 4, MSBFIRST, SPI_MODE1));
@@ -65,37 +63,6 @@ void ADS1256::sendCommand(unsigned char reg) {
   CSOFF();
 }
 
-void ADS1256::setMode(mode_t mode) {
-  if(mode == CONTINUOUS)
-    sendCommand(ADS1256_CMD_RDATAC);
-  else {
-    CSON();
-    spiobject.transfer(ADS1256_CMD_SDATAC);
-    spiobject.transfer(ADS1256_CMD_STANDBY);
-    delayMicroseconds(1);
-    CSOFF();
-  }
-}
-
-long ADS1256::readSingleShotRaw(){
-    CSON();
-    waitNotDRDY();
-    spiobject.transfer(ADS1256_CMD_WAKEUP);
-    waitDRDY();
-    spiobject.transfer(ADS1256_CMD_RDATA);
-    delayMicroseconds(7);              //  t6 delay (4*tCLKIN 50*0.13 = 6.5 us)       
-    long adsCode = read_int32();
-    waitDRDY();
-    spiobject.transfer(ADS1256_CMD_STANDBY);
-    CSOFF();
-
-    return adsCode;
-}
-
-float ADS1256::readSingleShot(){
-    long adsCode = readSingleShotRaw();
-    return convertADStoVoltage(adsCode);
-}
 
 float ADS1256::convertADStoVoltage(long ads){
   return ((float)(ads) / 0x7FFFFF) * ((2 * _VREF) / (float)_pga);
@@ -281,17 +248,11 @@ boolean ADS1256::isDRDY() {
 
 
 void ADS1256::digitalWriteADS(uint8_t gpio_pin, uint8_t state) {
-  mode_t last_mode = _mode;
-  if(_mode == CONTINUOUS){
-    setMode(ONESHOT);
-  }
-
   if(state == HIGH)
     _reg_IO |= (1<<gpio_pin);
   else
     _reg_IO &= ~(1<<gpio_pin);
   writeRegister(ADS1256_RADD_IO, _reg_IO);
-
 }
 
 // no PULLUPs

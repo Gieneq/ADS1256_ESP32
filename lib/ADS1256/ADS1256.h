@@ -127,7 +127,6 @@ class ADS1256 {
   void writeRegister(unsigned char reg, unsigned char wdata);
   unsigned char readRegister(unsigned char reg);
   void sendCommand(unsigned char cmd);
-  void setConversionFactor(float val);
   void setChannel(byte channel);
   void setChannel(byte AIP, byte AIN);
   void begin(unsigned char drate, unsigned char gain, bool bufferenable);
@@ -137,12 +136,9 @@ class ADS1256 {
   boolean isDRDY();
   void ADS1256::selfcal();
   void setGain(uint8_t gain);
-  void setMode(mode_t mode);
   float readCurrentChannelC();
   long readCurrentChannelCRaw();
   float convertADStoVoltage(long ads);
-  float readSingleShot();
-  long readSingleShotRaw();
   void digitalWriteADS(uint8_t gpio_pin, uint8_t state);
   void pinModeADS(uint8_t gpio_pin, uint8_t mode);
   uint8_t digitalReadADS(uint8_t gpio_pin);
@@ -158,7 +154,6 @@ class ADS1256 {
   float _VREF;
   uint8_t _buffer[BUFFER_SIZE];
   uint8_t _reg_IO;
-  mode_t _mode;
 
   SPIClass spiobject;
 };
