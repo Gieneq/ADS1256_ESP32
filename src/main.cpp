@@ -9,20 +9,17 @@ float clockMHZ = 7.68; // crystal frequency used on ADS1256
 float vRef = 2.47; // voltage reference
 
 // Construct and init ADS1256 object
-ADS1256 adc(clockMHZ,vRef,false); // RESETPIN is permanently tied to 3.3v
+ADS1256 adc(clockMHZ, vRef, false); // RESETPIN is permanently tied to 3.3v
 
 uint32_t rawValue;
 float value;
 
-void setup()
-{
+void setup() {
   Serial.begin(115200);
-  Serial.println("Starting ADS1256 SPI: ");
-  Serial.println(" * MISO: "); Serial.print(MISO);
-  Serial.println(" * MOSI: "); Serial.print(MOSI);
-  Serial.println(" * SCK: "); Serial.print(SCK);
+  Serial.println("Starting ADS1256");
+
   // start the ADS1256 with data rate of 15 SPS and gain x1
-  adc.begin(ADS1256_DRATE_30000SPS,ADS1256_GAIN_1,false); 
+  adc.begin(ADS1256_DRATE_2_5SPS,ADS1256_GAIN_1,false); 
  
   // Set MUX Register to AINO so it start doing the ADC conversion
   Serial.println("Channel set to Single end ch7");
@@ -31,14 +28,13 @@ void setup()
   adc.sendCommand(ADS1256_CMD_RDATAC);
 }
 
-void loop()
-{
+void loop() {
   rawValue = adc.readCurrentChannelCRaw();
   value = adc.convertADStoVoltage(rawValue);
 
-  // Serial.print("Ch7: 0x");
-  // Serial.print(rawValue, HEX);
-  // Serial.print(", U=");
-  // Serial.print(value, 4);
-  // Serial.println(" V");
+  Serial.print("Ch7: 0x");
+  Serial.print(rawValue, HEX);
+  Serial.print(", U=");
+  Serial.print(value, 4);
+  Serial.println(" V");
 }
