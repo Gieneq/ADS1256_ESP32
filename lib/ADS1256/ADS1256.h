@@ -8,7 +8,7 @@
 #ifndef ADS1256_h
 #define ADS1256_h
 
-#define pinDRDY 2
+#define pinDRDY 16
 #define pinRST  4
 #define pinCS   15
 
@@ -119,10 +119,11 @@ class ADS1256 {
   boolean isDRDY();
   void setGain(uint8_t gain);
   void setContinuousMode(bool useContinuous);
-  float pollCurrentChannel();
-  long pollCurrentChannelRaw();
+  float readCurrentChannelC();
+  long readCurrentChannelCRaw();
   void setGPIOState(uint8_t gpios);
   void setGPIOMode(uint8_t modes);
+  float convertADStoVoltage(long ads);
 
  private:
   void CSON();

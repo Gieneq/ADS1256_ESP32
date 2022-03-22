@@ -43,13 +43,8 @@ ADS1256::ADS1256(float clockspdMhz, float vref, bool useResetPin) {
 
 void ADS1256::writeRegister(unsigned char reg, unsigned char wdata) {
   CSON();
-
-
-
-  //todo
-
   spiobject.transfer(ADS1256_CMD_WREG | reg); // opcode1 Write registers starting from reg
-  spiobject.transfer(0);  // opcode2 Write 1+0 registers
+  spiobject.transfer(0);  // opcode2 Write (1 register) - 1 = 0
   spiobject.transfer(wdata);  // write wdata
   delayMicroseconds(1);              
   CSOFF();
@@ -59,7 +54,7 @@ unsigned char ADS1256::readRegister(unsigned char reg) {
   unsigned char readValue;
   CSON();
   spiobject.transfer(ADS1256_CMD_RREG | reg); // opcode1 read registers starting from reg
-  spiobject.transfer(0);                  // opcode2 read 1+0 registers
+  spiobject.transfer(0);                  // opcode2 Write (1 register) - 1 = 0
   delayMicroseconds(7);              //  t6 delay (4*tCLKIN 50*0.13 = 6.5 us)    
   readValue = spiobject.transfer(0);          // read registers
   delayMicroseconds(1);              //  t11 delay (4*tCLKIN 4*0.13 = 0.52 us)    
@@ -76,22 +71,26 @@ void ADS1256::sendCommand(unsigned char reg) {
 }
 
 void ADS1256::setContinuousMode(bool useContinuous){
-  // if(useContinuous)
+  if(useContinuous)
     sendCommand(ADS1256_CMD_RDATAC);
-  // else
-  //   sendCommand(ADS1256_CMD_SDATAC);
+  else
+    sendCommand(ADS1256_CMD_SDATAC);
 }
 
-void ADS1256::setConversionFactor(float val) { _conversionFactor = val; }
+float ADS1256::convertADStoVoltage(long ads){
+  return ((float)(ads) / 0x7FFFFF) * ((2 * _VREF) / (float)_pga);
+}
+
 
 float ADS1256::readCurrentChannel() {
   long adsCode = readCurrentChannelRaw();       
-  return (((float)(adsCode) / 0x7FFFFF) * ((2 * _VREF) / (float)_pga)) * _conversionFactor;
+  return convertADStoVoltage(adsCode);
 }
 
 // Reads raw ADC data, as 32bit int
 long ADS1256::readCurrentChannelRaw() {
   CSON();
+  waitDRDY();
   spiobject.transfer(ADS1256_CMD_RDATA);
   delayMicroseconds(7);              //  t6 delay (4*tCLKIN 50*0.13 = 6.5 us)       
   long adsCode = read_int32();
@@ -99,12 +98,12 @@ long ADS1256::readCurrentChannelRaw() {
   return adsCode;
 }
 
-float ADS1256::pollCurrentChannel() {
-  long adsCode = pollCurrentChannelRaw();       
+float ADS1256::readCurrentChannelC() {
+  long adsCode = readCurrentChannelCRaw();       
   return (((float)(adsCode) / 0x7FFFFF) * ((2 * _VREF) / (float)_pga)) * _conversionFactor;
 }
 
-long ADS1256::pollCurrentChannelRaw() {
+long ADS1256::readCurrentChannelCRaw() {
   waitDRDY(); // should be already ready
   CSON();
   long adsCode = read_int32();
@@ -228,6 +227,7 @@ Init chip with set datarate and gain and perform self calibration
 */ 
 void ADS1256::begin(unsigned char drate, unsigned char gain, bool buffenable) {
   _pga = 1 << gain;
+  sendCommand(ADS1256_CMD_RESET); 
   sendCommand(ADS1256_CMD_SDATAC);  // send out ADS1256_CMD_SDATAC command to stop continous reading mode.
   writeRegister(ADS1256_RADD_DRATE, drate);  // write data rate register   
   uint8_t bytemask = B00000111;
