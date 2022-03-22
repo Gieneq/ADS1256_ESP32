@@ -17,10 +17,12 @@ float value;
 void setup()
 {
   Serial.begin(115200);
-  Serial.println("Starting ADS1256");
-
+  Serial.println("Starting ADS1256 SPI: ");
+  Serial.println(" * MISO: "); Serial.print(MISO);
+  Serial.println(" * MOSI: "); Serial.print(MOSI);
+  Serial.println(" * SCK: "); Serial.print(SCK);
   // start the ADS1256 with data rate of 15 SPS and gain x1
-  adc.begin(ADS1256_DRATE_5SPS,ADS1256_GAIN_1,false); 
+  adc.begin(ADS1256_DRATE_30000SPS,ADS1256_GAIN_1,false); 
  
   // Set MUX Register to AINO so it start doing the ADC conversion
   Serial.println("Channel set to Single end ch7");
@@ -34,9 +36,9 @@ void loop()
   rawValue = adc.readCurrentChannelCRaw();
   value = adc.convertADStoVoltage(rawValue);
 
-  Serial.print("Ch7: 0x");
-  Serial.print(rawValue, HEX);
-  Serial.print(", U=");
-  Serial.print(value, 4);
-  Serial.println(" V");
+  // Serial.print("Ch7: 0x");
+  // Serial.print(rawValue, HEX);
+  // Serial.print(", U=");
+  // Serial.print(value, 4);
+  // Serial.println(" V");
 }
