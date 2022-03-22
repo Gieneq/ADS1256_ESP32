@@ -7,8 +7,8 @@
 
 #include "ADS1256.h"
 #include "Arduino.h"
-#include <esp32-hal-spi.h>
 #include "SPI.h"
+
 
 ADS1256::ADS1256(float clockspdMhz, float vref, bool useResetPin) {
   // Set DRDY as input
@@ -26,15 +26,10 @@ ADS1256::ADS1256(float clockspdMhz, float vref, bool useResetPin) {
   // Voltage Reference
   _VREF = vref;
 
-  // Default conversion factor
-  _conversionFactor = 1.0;
+  // Copy reg IO, default all inputs, IO0 - CLKOUT dont care
+  _reg_IO = B11110000;
 
-  // Choose HSPI:
-  // SCK : 14;
-  // MISO : 12;
-  // MOSI : 13;
-  // SS : 15;
-  spiobject = SPIClass(HSPI);
+  _mode = ONESHOT;
 
   // Start SPI on a quarter of ADC clock speed
   spiobject.begin();
@@ -70,59 +65,65 @@ void ADS1256::sendCommand(unsigned char reg) {
   CSOFF();
 }
 
-void ADS1256::setContinuousMode(bool useContinuous){
-  if(useContinuous)
+void ADS1256::setMode(mode_t mode) {
+  if(mode == CONTINUOUS)
     sendCommand(ADS1256_CMD_RDATAC);
-  else
-    sendCommand(ADS1256_CMD_SDATAC);
+  else {
+    CSON();
+    spiobject.transfer(ADS1256_CMD_SDATAC);
+    spiobject.transfer(ADS1256_CMD_STANDBY);
+    delayMicroseconds(1);
+    CSOFF();
+  }
+}
+
+long ADS1256::readSingleShotRaw(){
+    CSON();
+    waitNotDRDY();
+    spiobject.transfer(ADS1256_CMD_WAKEUP);
+    waitDRDY();
+    spiobject.transfer(ADS1256_CMD_RDATA);
+    delayMicroseconds(7);              //  t6 delay (4*tCLKIN 50*0.13 = 6.5 us)       
+    long adsCode = read_int32();
+    waitDRDY();
+    spiobject.transfer(ADS1256_CMD_STANDBY);
+    CSOFF();
+
+    return adsCode;
+}
+
+float ADS1256::readSingleShot(){
+    long adsCode = readSingleShotRaw();
+    return convertADStoVoltage(adsCode);
 }
 
 float ADS1256::convertADStoVoltage(long ads){
   return ((float)(ads) / 0x7FFFFF) * ((2 * _VREF) / (float)_pga);
 }
 
-
-float ADS1256::readCurrentChannel() {
-  long adsCode = readCurrentChannelRaw();       
-  return convertADStoVoltage(adsCode);
-}
-
-// Reads raw ADC data, as 32bit int
-long ADS1256::readCurrentChannelRaw() {
-  CSON();
-  waitDRDY();
-  spiobject.transfer(ADS1256_CMD_RDATA);
-  delayMicroseconds(7);              //  t6 delay (4*tCLKIN 50*0.13 = 6.5 us)       
-  long adsCode = read_int32();
-  CSOFF();
-  return adsCode;
-}
-
 float ADS1256::readCurrentChannelC() {
   long adsCode = readCurrentChannelCRaw();       
-  return (((float)(adsCode) / 0x7FFFFF) * ((2 * _VREF) / (float)_pga)) * _conversionFactor;
+  return (((float)(adsCode) / 0x7FFFFF) * ((2 * _VREF) / (float)_pga));
 }
 
 long ADS1256::readCurrentChannelCRaw() {
-  waitDRDY(); // should be already ready
   CSON();
+  waitDRDY();
   long adsCode = read_int32();
-  // long adsCode = 0;
-  // spiobject.transfer(buffer, 3);
   CSOFF();
   return adsCode;
 }
 
 // Call this ONLY after ADS1256_CMD_RDATA command
 unsigned long ADS1256::read_uint24() {
-  buffer[0] = 0;
-  buffer[1] = 0;
-  buffer[2] = 0;
-  spiobject.transfer(buffer, 3);
+  _buffer[0] = 0;
+  _buffer[1] = 0;
+  _buffer[2] = 0;
+  spiobject.transfer(_buffer, 3);
 
   // Combine all 3-bytes to 24-bit data using byte shifting.
   // return uint8_t(*buffer) >> 8;
-  return ((long)buffer[2] << 16) + ((long)buffer[1] << 8) + ((long)buffer[0]);
+  return ((long)_buffer[0] << 16) + ((long)_buffer[1] << 8) + ((long)_buffer[2]);
 }
 
 // Call this ONLY after ADS1256_CMD_RDATA command
@@ -239,19 +240,6 @@ void ADS1256::begin(unsigned char drate, unsigned char gain, bool buffenable) {
     bitSet(status, 1); 
     writeRegister(ADS1256_RADD_STATUS, status);
   }
-  sendCommand(ADS1256_CMD_SELFCAL);  // perform self calibration
-  
-  waitDRDY(); // wait ADS1256 to settle after self calibration
-}
-
-/*
-Init chip with default datarate and gain and perform self calibration
-*/ 
-void ADS1256::begin() {
-  sendCommand(ADS1256_CMD_SDATAC);  // send out ADS1256_CMD_SDATAC command to stop continous reading mode.
-  uint8_t status = readRegister(ADS1256_RADD_STATUS);      
-  sendCommand(ADS1256_CMD_SELFCAL);  // perform self calibration  
-  waitDRDY();   // wait ADS1256 to settle after self calibration
 }
 
 /*
@@ -262,11 +250,10 @@ uint8_t ADS1256::getStatus() {
   return readRegister(ADS1256_RADD_STATUS); 
 }
 
-// float ADS1256::pollContinuousChannel() {
-//   CSON(); 
-//   long adsCode = read_int32();
-//   CSOFF();
-// }
+void ADS1256::selfcal() {
+  sendCommand(ADS1256_CMD_SELFCAL);  // perform self calibration
+  waitDRDY(); // wait ADS1256 to settle after self calibration
+}
 
 
 void ADS1256::CSON() {
@@ -283,24 +270,42 @@ void ADS1256::waitDRDY() {
   //while (PIN_DRDY & (1 << PINDEX_DRDY));
   while (digitalRead(pinDRDY));
 }
+void ADS1256::waitNotDRDY() {
+  //while (PIN_DRDY & (1 << PINDEX_DRDY));
+  while (!digitalRead(pinDRDY));
+}
 
 boolean ADS1256::isDRDY() {
   return !digitalRead(pinDRDY);
 }	
 
 
-// 0 - output, 1 - input
-void ADS1256::setGPIOState(uint8_t gpios) {
-  uint8_t reg_value = (readGPIO() & 0xF0) + ((gpios << 4) & 0x0F);
-  writeRegister(ADS1256_RADD_IO, reg_value);
+void ADS1256::digitalWriteADS(uint8_t gpio_pin, uint8_t state) {
+  mode_t last_mode = _mode;
+  if(_mode == CONTINUOUS){
+    setMode(ONESHOT);
+  }
+
+  if(state == HIGH)
+    _reg_IO |= (1<<gpio_pin);
+  else
+    _reg_IO &= ~(1<<gpio_pin);
+  writeRegister(ADS1256_RADD_IO, _reg_IO);
 
 }
 
-void ADS1256::setGPIOMode(uint8_t modes) {
-  uint8_t reg_value = (modes & 0xF0) + (readGPIO() & 0x0F);
-  writeRegister(ADS1256_RADD_IO, reg_value);
+// no PULLUPs
+void ADS1256::pinModeADS(uint8_t gpio_pin, uint8_t mode) {
+  // 0 - output, 1 - input, state bits shifted + 4
+  if(mode == OUTPUT)
+    _reg_IO &= ~(1<<(gpio_pin+4));
+  else
+    _reg_IO |= (1<<(gpio_pin+4));
+  writeRegister(ADS1256_RADD_IO, _reg_IO);
 }
 
-uint8_t ADS1256::readGPIO() {
-  return readRegister(ADS1256_RADD_IO); 
+uint8_t ADS1256::digitalReadADS(uint8_t gpio_pin) {
+  uint8_t ioreg = readRegister(ADS1256_RADD_IO); 
+
+  return (ioreg & (1<<gpio_pin)) > 0 ? HIGH : LOW;
 }
