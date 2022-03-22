@@ -86,9 +86,7 @@ long ADS1256::readCurrentChannelCRaw() {
 
 // Call this ONLY after ADS1256_CMD_RDATA command
 unsigned long ADS1256::read_uint24() {
-  _buffer[0] = 0;
-  _buffer[1] = 0;
-  _buffer[2] = 0;
+  *((uint32_t*)_buffer) = 0;
   spiobject.transfer(_buffer, 3);
 
   // Combine all 3-bytes to 24-bit data using byte shifting.

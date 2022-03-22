@@ -116,7 +116,7 @@
 #define ADS1256_DRATE_2_5SPS 0x03
 
 //other
-#define BUFFER_SIZE 3
+#define BUFFER_SIZE 4
 
 class ADS1256 {
  public:

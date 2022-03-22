@@ -20,7 +20,7 @@ void setup()
   Serial.println("Starting ADS1256");
 
   // start the ADS1256 with data rate of 15 SPS and gain x1
-  adc.begin(ADS1256_DRATE_2_5SPS,ADS1256_GAIN_1,false); 
+  adc.begin(ADS1256_DRATE_5SPS,ADS1256_GAIN_1,false); 
  
   // Set MUX Register to AINO so it start doing the ADC conversion
   Serial.println("Channel set to Single end ch7");
