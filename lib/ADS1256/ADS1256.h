@@ -21,7 +21,6 @@
 #define pinRST  4
 #define pinCS   15
 #include <esp32-hal-spi.h>
-SPIClass spiobject(HSPI);
 // Choose HSPI:
 // SCK : 14;
 // MISO : 12;
@@ -119,8 +118,6 @@ SPIClass spiobject(HSPI);
 //other
 #define BUFFER_SIZE 3
 
-enum mode_t {ONESHOT, CONTINUOUS};
-
 class ADS1256 {
  public:
   ADS1256(float clockspdMhz, float vref, bool useresetpin);
@@ -134,7 +131,7 @@ class ADS1256 {
   void waitDRDY();
   void waitNotDRDY();
   boolean isDRDY();
-  void ADS1256::selfcal();
+  void selfcal();
   void setGain(uint8_t gain);
   float readCurrentChannelC();
   long readCurrentChannelCRaw();
@@ -154,8 +151,6 @@ class ADS1256 {
   float _VREF;
   uint8_t _buffer[BUFFER_SIZE];
   uint8_t _reg_IO;
-
-  SPIClass spiobject;
 };
 
 #endif

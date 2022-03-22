@@ -9,6 +9,9 @@
 #include "Arduino.h"
 #include "SPI.h"
 
+#if   defined(ARDUINO_ARCH_ESP32)
+SPIClass spiobject(HSPI);
+#endif
 
 ADS1256::ADS1256(float clockspdMhz, float vref, bool useResetPin) {
   // Set DRDY as input
